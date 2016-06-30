@@ -74,6 +74,33 @@ type Label struct {
 	Color string
 }
 
+type Release struct {
+	ID         int
+	TagName    string `json:"tag_name"`
+	Name       string
+	Body       string
+	Draft      bool
+	Prerelease bool
+	Created    time.Time `json:"created_at"`
+	Published  time.Time `json:"published_at"`
+	Author     User
+	Assets     []Asset
+}
+
+type Asset struct {
+	BrowserDownloadURL string `json:"browser_download_url"`
+	ID                 int
+	Name               string
+	Label              string
+	State              string
+	ContentType        string `json:"content_type"`
+	Size               int
+	DownloadCount      int       `json:"download_count"`
+	Created            time.Time `json:"created_at"`
+	Updated            time.Time `json:"updated_at"`
+	Uploader           User
+}
+
 func LoadIssues(repo string, query url.Values) ([]Issue, error) {
 	link := "https://" + path.Join("api.github.com/repos", repo, "issues")
 	if query != nil {
@@ -96,6 +123,15 @@ func LoadMilestones(repo string, query url.Values) ([]Milestone, error) {
 		return nil, err
 	}
 	return issues.([]Milestone), nil
+}
+
+func LoadReleases(repo string) ([]Release, error) {
+	link := "https://" + path.Join("api.github.com/repos", repo, "releases")
+	rels, err := loadSlice(link, Release{})
+	if err != nil {
+		return nil, err
+	}
+	return rels.([]Release), nil
 }
 
 // loadSlice loads url and decodes it into a []elemType, returning the []elemType and error.
