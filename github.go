@@ -8,9 +8,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"reflect"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/microcosm-cc/bluemonday"
@@ -67,6 +69,7 @@ type Milestone struct {
 type User struct {
 	Login string
 	ID    int
+	Email string
 }
 
 type Label struct {
@@ -99,6 +102,13 @@ type Asset struct {
 	Created            time.Time `json:"created_at"`
 	Updated            time.Time `json:"updated_at"`
 	Uploader           User
+}
+
+type Team struct {
+	Name string
+	ID   int
+	Slug string
+	URL  string
 }
 
 func LoadIssues(repo string, query url.Values) ([]Issue, error) {
@@ -134,6 +144,56 @@ func LoadReleases(repo string) ([]Release, error) {
 	return rels.([]Release), nil
 }
 
+func LoadTeams(org string) ([]Team, error) {
+	link := "https://" + path.Join("api.github.com/orgs", org, "teams")
+	rels, err := loadSlice(link, Team{})
+	if err != nil {
+		return nil, err
+	}
+	return rels.([]Team), nil
+}
+
+func LoadTeamMembers(teamID int) ([]User, error) {
+	link := "https://" + path.Join("api.github.com/teams", strconv.Itoa(teamID), "members")
+	rels, err := loadSlice(link, User{})
+	if err != nil {
+		return nil, err
+	}
+	return rels.([]User), nil
+}
+
+func GetUserEmail(username string) (string, error) {
+	link := "https://" + path.Join("api.github.com/users", username)
+	var user User
+	if err := requestInto(link, &user); err != nil {
+		return "", err
+	}
+	return user.Email, nil
+}
+
+func requestInto(link string, v interface{}) error {
+	req, err := http.NewRequest("GET", link, nil)
+	if err != nil {
+		return err
+	}
+
+	setAuthentication(req)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode > 299 {
+		lr := io.LimitReader(resp.Body, 1024)
+		bs, _ := ioutil.ReadAll(lr)
+		return fmt.Errorf("http.Get: %v (%s)", resp.Status, bs)
+	}
+
+	return json.NewDecoder(resp.Body).Decode(v)
+}
+
 // loadSlice loads url and decodes it into a []elemType, returning the []elemType and error.
 func loadSlice(url string, elemType interface{}) (interface{}, error) {
 	t := reflect.TypeOf(elemType)
@@ -145,6 +205,8 @@ func loadSlice(url string, elemType interface{}) (interface{}, error) {
 		if err != nil {
 			return result.Interface(), err
 		}
+
+		setAuthentication(req)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -178,4 +240,12 @@ func parseRel(link, rel string) string {
 		return match[1]
 	}
 	return ""
+}
+
+func setAuthentication(req *http.Request) {
+	username := os.Getenv("GITHUB_USERNAME")
+	token := os.Getenv("GITHUB_TOKEN")
+	if username != "" && token != "" {
+		req.SetBasicAuth(username, token)
+	}
 }
