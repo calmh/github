@@ -111,6 +111,20 @@ type Team struct {
 	URL  string
 }
 
+type Notification struct {
+	ID         json.Number
+	Repository struct {
+		Name string `json:"full_name"`
+	}
+	Subject struct {
+		Title string
+		Type  string
+		URL   string
+	}
+	Reason string
+	Unread bool
+}
+
 func LoadIssues(repo string, query url.Values) ([]Issue, error) {
 	link := "https://" + path.Join("api.github.com/repos", repo, "issues")
 	if query != nil {
@@ -160,6 +174,15 @@ func LoadTeamMembers(teamID int) ([]User, error) {
 		return nil, err
 	}
 	return rels.([]User), nil
+}
+
+func LoadNotifications() ([]Notification, error) {
+	link := "https://" + path.Join("api.github.com/notifications")
+	rels, err := loadSlice(link, Notification{})
+	if err != nil {
+		return nil, err
+	}
+	return rels.([]Notification), nil
 }
 
 func GetUserEmail(username string) (string, error) {
